@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade 2.0 Journal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --border-color: #e5e7eb;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --accent-blue: #3b82f6;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        .modal-backdrop { display: none; position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); z-index: 40; }
+        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 50; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .stat-card {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem; padding: 1.5rem;
+        }
+        .sidebar-link {
+            display: flex; align-items: center; padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem; color: var(--text-secondary); transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .sidebar-link:hover { background-color: var(--bg-secondary); color: var(--text-primary); }
+        .sidebar-link.active { background-color: var(--accent-blue); color: white; }
+        .page { display: none; }
+        .page.active { display: block; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to: { opacity: 1; } }
+        
+        .filter-btn {
+            background-color: var(--bg-primary); border: 1px solid var(--border-color);
+            color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 0.5rem;
+            transition: all 0.2s ease;
+        }
+        .filter-btn:hover { background-color: var(--bg-secondary); color: var(--text-primary); }
+        .filter-btn.active { background-color: var(--accent-blue); color: white; border-color: var(--accent-blue); }
+        
+        /* Calendar Styles */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background-color: var(--border-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .calendar-header {
+            text-align: center;
+            padding: 0.75rem 0;
+            background-color: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        .calendar-day {
+            position: relative;
+            background-color: var(--bg-primary);
+            min-height: 120px;
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .calendar-day:hover {
+            background-color: var(--bg-secondary);
+        }
+        .calendar-day.other-month {
+            background-color: var(--bg-secondary);
+            color: #d1d5db;
+            cursor: default;
+        }
+         .calendar-day.other-month:hover {
+            background-color: var(--bg-secondary);
+        }
+        .calendar-day .day-number {
+            font-weight: 500;
+        }
+        .calendar-day .day-number.today {
+            background-color: var(--accent-blue);
+            color: white;
+            border-radius: 9999px;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .day-stats {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .form-input {
+            width: 100%;
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+        }
+        .form-input::placeholder {
+            color: #9ca3af;
+        }
+        .tag-container {
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: var(--bg-secondary);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 flex-shrink-0 border-r flex flex-col" style="background-color: var(--bg-secondary); border-color: var(--border-color);">
+            <div class="h-16 flex items-center justify-center px-4 border-b" style="border-color: var(--border-color);">
+                <h1 class="text-2xl font-bold" style="color: var(--text-primary);">Trade 2.0</h1>
+            </div>
+            <nav class="flex-1 p-4 space-y-2">
+                <a href="#" id="dashboard-link" class="sidebar-link active" onclick="showPage('dashboard')">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    Dashboard
+                </a>
+                <a href="#" id="trades-link" class="sidebar-link" onclick="showPage('trades')">
+                     <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    Trades
+                </a>
+                 <a href="#" id="playbooks-link" class="sidebar-link" onclick="showPage('playbooks')">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v11.494m-9-5.747h18"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 21.75h4.5a2.25 2.25 0 002.25-2.25v-15a2.25 2.25 0 00-2.25-2.25h-4.5a2.25 2.25 0 00-2.25 2.25v15a2.25 2.25 0 002.25 2.25z"></path></svg>
+                    Playbooks
+                </a>
+                <a href="#" id="planning-link" class="sidebar-link" onclick="showPage('planning')">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    Planning
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto" style="background-color: #f9fafb;">
+            <div id="app" class="p-4 sm:p-6 lg:p-8">
+                <!-- Header -->
+                <header class="flex flex-wrap justify-between items-center mb-8 gap-4">
+                     <div class="flex-1">
+                        <h2 id="page-title" class="text-3xl font-bold">Dashboard</h2>
+                         <div id="filter-container" class="mt-4 flex items-center gap-2">
+                            <select id="ticker-filter" class="form-input p-2 focus:ring-blue-500 focus:border-blue-500 max-w-xs">
+                                <option value="all">All Tickers</option>
+                            </select>
+                            <div id="timeframe-filters" class="flex gap-2">
+                                <button class="filter-btn" data-frame="today">Today</button>
+                                <button class="filter-btn" data-frame="7d">Last 7 Days</button>
+                                <button class="filter-btn" data-frame="30d">Last 30 Days</button>
+                                <button class="filter-btn active" data-frame="all">All Time</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="page-actions" class="flex items-center gap-2">
+                        <button onclick="showModal('importExportModal')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-2 px-4 rounded-lg border border-gray-300">Import/Export</button>
+                        <button id="header-new-btn" onclick="showNewTradeModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-transform transform hover:scale-105" style="background-color: var(--accent-blue);">+ New Trade</button>
+                    </div>
+                </header>
+
+                <!-- Dashboard Page -->
+                <div id="dashboard-page" class="page active">
+                    <div id="dashboard" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 mb-8"></div>
+                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                        <div class="stat-card">
+                            <h3 class="text-lg font-semibold mb-4">Cumulative P&L</h3>
+                            <canvas id="pnlChart"></canvas>
+                        </div>
+                        <div class="stat-card">
+                            <h3 class="text-lg font-semibold mb-4">Performance by Day</h3>
+                            <canvas id="dayPerformanceChart"></canvas>
+                        </div>
+                    </div>
+                     <div class="stat-card">
+                            <h3 class="text-lg font-semibold mb-4">Performance by Setup</h3>
+                            <canvas id="setupPerformanceChart"></canvas>
+                     </div>
+                </div>
+
+                <!-- Trades Page -->
+                <div id="trades-page" class="page">
+                    <div class="stat-card">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs uppercase" style="color: var(--text-secondary);">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3">Ticker</th>
+                                        <th scope="col" class="px-6 py-3">Direction</th>
+                                        <th scope="col" class="px-6 py-3">Status</th>
+                                        <th scope="col" class="px-6 py-3">P&L ($)</th>
+                                        <th scope="col" class="px-6 py-3">Entry Date</th>
+                                        <th scope="col" class="px-6 py-3">Playbook</th>
+                                        <th scope="col" class="px-6 py-3 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trade-log-body"></tbody>
+                            </table>
+                            <div id="no-trades-message" class="text-center py-12 text-gray-500">
+                                <h3 class="mt-2 text-sm font-medium">No trades logged for this period</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Playbooks Page -->
+                <div id="playbooks-page" class="page">
+                    <div id="playbooks-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Playbooks will be rendered here -->
+                    </div>
+                    <div id="no-playbooks-message" class="text-center py-20 text-gray-500 hidden">
+                        <svg class="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v11.494m-9-5.747h18"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 21.75h4.5a2.25 2.25 0 002.25-2.25v-15a2.25 2.25 0 00-2.25-2.25h-4.5a2.25 2.25 0 00-2.25 2.25v15a2.25 2.25 0 002.25 2.25z"></path></svg>
+                        <h3 class="mt-2 text-sm font-medium">No playbooks yet</h3>
+                        <p class="mt-1 text-sm">Get started by creating a new playbook.</p>
+                        <div class="mt-6">
+                            <button onclick="showNewPlaybookModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                + New Playbook
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Planning Page -->
+                <div id="planning-page" class="page">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-4">
+                            <button id="prev-month-btn" class="filter-btn">&lt;</button>
+                            <h2 id="calendar-header" class="text-xl font-bold text-center"></h2>
+                            <button id="next-month-btn" class="filter-btn">&gt;</button>
+                        </div>
+                        <div id="monthly-stats" class="text-right">
+                            <!-- Monthly stats will be rendered here -->
+                        </div>
+                    </div>
+                    <div class="calendar-grid-container">
+                        <div class="calendar-grid">
+                            <div class="calendar-header">Sun</div>
+                            <div class="calendar-header">Mon</div>
+                            <div class="calendar-header">Tue</div>
+                            <div class="calendar-header">Wed</div>
+                            <div class="calendar-header">Thu</div>
+                            <div class="calendar-header">Fri</div>
+                            <div class="calendar-header">Sat</div>
+                        </div>
+                        <div id="calendar-body" class="calendar-grid">
+                            <!-- Calendar days will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="newTradeModalBackdrop" class="modal-backdrop"></div>
+    <div id="newTradeModal" class="modal w-full max-w-4xl rounded-xl shadow-lg border" style="background-color: var(--bg-primary); border-color: var(--border-color);">
+         <form id="trade-form" class="p-6">
+            <h3 class="text-xl font-semibold mb-6">Log Trade Details</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <input type="text" id="ticker" placeholder="Ticker Symbol" required class="form-input">
+                    <select id="direction" required class="form-input"><option value="long">Long</option><option value="short">Short</option></select>
+                    <input type="number" step="any" id="entryPrice" placeholder="Entry Price" required class="form-input">
+                    <input type="number" step="any" id="exitPrice" placeholder="Exit Price" class="form-input">
+                    <input type="number" step="any" id="quantity" placeholder="Quantity / Size" required class="form-input">
+                    <div class="grid grid-cols-2 gap-4">
+                         <input type="number" step="any" id="stopLoss" placeholder="Stop Loss Price" class="form-input">
+                         <input type="number" step="any" id="takeProfit" placeholder="Take Profit Price" class="form-input">
+                    </div>
+                     <input type="number" step="any" id="riskFactor" placeholder="Risk Factor ($)" class="form-input">
+                    <div class="flex gap-4"><input type="date" id="entryDate" required class="form-input" title="Entry Date"><input type="date" id="exitDate" class="form-input" title="Exit Date"></div>
+                    <input type="text" id="chartUrl" placeholder="Paste Chart Image URL (optional)" class="form-input">
+                </div>
+                 <div class="space-y-4">
+                    <div>
+                        <label class="font-semibold text-sm mb-2 block">Playbook / Setup</label>
+                        <select id="strategy" required class="form-input">
+                            <option value="">Select a Playbook</option>
+                         </select>
+                    </div>
+                    <div>
+                        <label class="font-semibold text-sm mb-2 block">Entry Criteria</label>
+                        <div id="entry-criteria-checklist" class="tag-container text-sm text-gray-800 min-h-[100px]">
+                            <!-- Dynamic criteria checkboxes will be inserted here -->
+                        </div>
+                    </div>
+                     <div>
+                        <label class="font-semibold text-sm mb-2 block">Mistakes</label>
+                        <div id="mistakes-checkbox-container" class="tag-container space-y-2"></div>
+                    </div>
+                    <textarea id="notes" placeholder="Notes, feelings, rationale..." rows="4" class="form-input"></textarea>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3"><input type="hidden" id="trade-id"><button type="button" onclick="closeModal('newTradeModal')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg">Cancel</button><button id="save-trade-btn" type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>Save</button></div>
+        </form>
+    </div>
+    
+    <div id="tradeDetailsModalBackdrop" class="modal-backdrop"></div>
+    <div id="tradeDetailsModal" class="modal w-full max-w-4xl rounded-xl shadow-lg border" style="background-color: var(--bg-primary); border-color: var(--border-color);"></div>
+
+    <div id="importExportModalBackdrop" class="modal-backdrop"></div>
+    <div id="importExportModal" class="modal w-full max-w-lg rounded-xl shadow-lg border p-6" style="background-color: var(--bg-primary); border-color: var(--border-color);">
+        <h3 class="text-xl font-semibold mb-4">Import / Export Data</h3><p class="text-gray-500 mb-6">Save your data to a file or load it from a backup.</p>
+        <div class="flex flex-col gap-4">
+            <button onclick="exportData()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Export to JSON</button><input type="file" id="importFile" accept=".json" class="hidden"/><button onclick="document.getElementById('importFile').click()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Import from JSON</button>
+            <div class="border-t my-2" style="border-color: var(--border-color);"></div><input type="file" id="importCsvFile" accept=".csv" class="hidden"/><button onclick="document.getElementById('importCsvFile').click()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Import from CSV</button><p class="text-xs text-gray-400 mt-2">Required columns: Ticker, Direction, EntryDate, EntryPrice, ExitDate, ExitPrice, Quantity...</p>
+        </div>
+        <div class="mt-6 flex justify-end"><button type="button" onclick="closeModal('importExportModal')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg">Close</button></div>
+    </div>
+
+    <div id="customModalBackdrop" class="modal-backdrop"></div>
+    <div id="customModal" class="modal w-full max-w-sm rounded-xl shadow-lg border p-6 text-center" style="background-color: var(--bg-primary); border-color: var(--border-color);">
+        <h3 id="customModalTitle" class="text-lg font-medium"></h3><p id="customModalMessage" class="mt-2 text-sm text-gray-500"></p><div id="customModalButtons" class="mt-6 flex justify-center gap-4"></div>
+    </div>
+    
+    <div id="planModalBackdrop" class="modal-backdrop"></div>
+    <div id="planModal" class="modal w-full max-w-2xl rounded-xl shadow-lg border" style="background-color: var(--bg-primary); border-color: var(--border-color);">
+        <div class="p-6">
+            <h3 id="plan-modal-title" class="text-xl font-semibold mb-6"></h3>
+            <div class="space-y-6">
+                <div><label class="font-semibold">Recap & Lessons:</label><textarea id="daily-recap" class="mt-2 form-input h-24" placeholder="What went well?"></textarea></div>
+                <div><label class="font-semibold">Primary Focus:</label><textarea id="daily-focus" class="mt-2 form-input h-24" placeholder="e.g., 'Patience'"></textarea></div>
+                <div><label class="font-semibold">Potential Setups:</label><textarea id="daily-setups" class="mt-2 form-input h-32" placeholder="What setups are you looking for?"></textarea></div>
+            </div>
+             <div class="mt-6 flex justify-end gap-3">
+                <input type="hidden" id="plan-date">
+                <button type="button" onclick="closeModal('planModal')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg">Close</button>
+                <button type="button" id="save-plan-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Plan</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="playbookModalBackdrop" class="modal-backdrop"></div>
+    <div id="playbookModal" class="modal w-full max-w-2xl rounded-xl shadow-lg border" style="background-color: var(--bg-primary); border-color: var(--border-color);">
+         <form id="playbook-form" class="p-6">
+            <h3 class="text-xl font-semibold mb-6">Playbook Details</h3>
+            <div class="space-y-4">
+                 <input type="text" id="playbook-title" placeholder="Playbook Title" required class="form-input">
+                 <textarea id="playbook-description" placeholder="General notes about the strategy..." rows="4" class="form-input"></textarea>
+                 <div>
+                    <label class="font-semibold text-sm mb-2 block">Setup Criteria</label>
+                    <div id="playbook-criteria-list" class="space-y-2">
+                        <!-- Dynamic criteria inputs here -->
+                    </div>
+                    <button type="button" id="add-criterion-btn" class="mt-2 text-sm text-blue-600 hover:underline">+ Add Criterion</button>
+                 </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <input type="hidden" id="playbook-id">
+                <button type="button" onclick="closeModal('playbookModal')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg">Cancel</button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Playbook</button>
+            </div>
+        </form>
+    </div>
+
+
+<script>
+// --- STATE & CORE ---
+const state = { trades: [], playbooks: [], charts: {}, selectedTicker: 'all', timeframe: 'all', calendarDate: new Date() };
+const VARS = { accent_green: '#22c55e', accent_red: '#ef4444', text_secondary: '#6b7280', border_color: '#e5e7eb', text_primary: '#111827' };
+const MISTAKES_LIST = ["FOMO", "Held too long", "Bad entry", "No stop loss", "Revenge trading", "Oversized", "Broke rules", "Hesitated on entry", "Exited too early"];
+
+// --- UTILS ---
+const formatCurrency = (v) => v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`;
+
+// --- NAVIGATION & MODALS ---
+const showPage = (id) => {
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.sidebar-link').forEach(l=>l.classList.remove('active'));
+    document.getElementById(`${id}-page`).classList.add('active');
+    document.getElementById(`${id}-link`).classList.add('active');
+    document.getElementById('page-title').textContent = id.charAt(0).toUpperCase() + id.slice(1);
+    
+    const pageActions = document.getElementById('page-actions');
+    const headerNewBtn = document.getElementById('header-new-btn');
+    document.getElementById('filter-container').style.display = 'flex';
+
+    if (id === 'planning') {
+        pageActions.style.display = 'none';
+        document.getElementById('filter-container').style.display = 'none';
+    } else if (id === 'playbooks') {
+        pageActions.style.display = 'flex';
+        headerNewBtn.textContent = '+ New Playbook';
+        headerNewBtn.onclick = () => showNewPlaybookModal();
+        document.getElementById('filter-container').style.display = 'none';
+    } else {
+        pageActions.style.display = 'flex';
+        headerNewBtn.textContent = '+ New Trade';
+        headerNewBtn.onclick = () => showNewTradeModal();
+    }
+};
+const showModal = (id) => { document.getElementById(`${id}Backdrop`).style.display = 'block'; document.getElementById(id).style.display = 'block'; };
+const closeModal = (id) => { document.getElementById(`${id}Backdrop`).style.display = 'none'; document.getElementById(id).style.display = 'none'; };
+const showNewTradeModal = (trade = null) => {
+    document.getElementById('trade-form').reset();
+    document.getElementById('trade-id').value = '';
+    
+    const playbookTitle = trade ? trade.strategy : '';
+    const confirmedCriteria = trade ? trade.confirmedCriteria : [];
+
+    populatePlaybookDropdown(playbookTitle);
+    updateCriteriaChecklist(playbookTitle, confirmedCriteria);
+
+    populateCheckboxes('mistakes-checkbox-container', MISTAKES_LIST, 'mistake', trade ? trade.mistakes : []);
+
+    if(trade){ 
+        Object.keys(trade).forEach(k => { 
+            const el = document.getElementById(k); 
+            if(el && el.type !== 'checkbox') el.value = trade[k]; 
+        }); 
+        document.getElementById('trade-id').value = trade.id; 
+    }
+    showModal('newTradeModal');
+};
+const showCustomModal = (title, msg, buttons) => {
+    document.getElementById('customModalTitle').textContent = title;
+    document.getElementById('customModalMessage').innerHTML = msg;
+    const btnContainer = document.getElementById('customModalButtons');
+    btnContainer.innerHTML = '';
+    buttons.forEach(b => {
+        const btn = document.createElement('button');
+        btn.textContent = b.text; btn.className = b.class;
+        btn.onclick = () => { closeModal('customModal'); if(b.handler) b.handler(); };
+        btnContainer.appendChild(btn);
+    });
+    showModal('customModal');
+};
+const customAlert = (m) => showCustomModal('Alert',m,[{text:'OK',class:'bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg'}]);
+const customConfirm = (m,cb) => showCustomModal('Confirm',m,[{text:'Cancel',class:'bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg'},{text:'Confirm',class:'bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg',handler:cb}]);
+
+// --- DATA PERSISTENCE & MANIPULATION ---
+const saveTrades = () => localStorage.setItem('tradeJournal2.8.trades', JSON.stringify(state.trades));
+const loadTrades = () => { 
+    const savedTrades = localStorage.getItem('tradeJournal2.8.trades');
+    if (savedTrades) {
+         state.trades = JSON.parse(savedTrades); 
+    }
+};
+document.getElementById('trade-form').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const id=document.getElementById('trade-id').value;
+    const selectedMistakes = Array.from(document.querySelectorAll('input[name="mistake"]:checked')).map(cb => cb.value);
+    const confirmedCriteria = Array.from(document.querySelectorAll('input[name="criterion"]:checked')).map(cb => cb.value);
+
+    const data={id:id||`trade_${Date.now()}`,ticker:document.getElementById('ticker').value.toUpperCase(),direction:document.getElementById('direction').value,strategy:document.getElementById('strategy').value,entryDate:document.getElementById('entryDate').value,exitDate:document.getElementById('exitDate').value,entryPrice:parseFloat(document.getElementById('entryPrice').value),exitPrice:parseFloat(document.getElementById('exitPrice').value)||null,quantity:parseFloat(document.getElementById('quantity').value),stopLoss:parseFloat(document.getElementById('stopLoss').value)||null,takeProfit:parseFloat(document.getElementById('takeProfit').value)||null,riskFactor:parseFloat(document.getElementById('riskFactor').value)||null,notes:document.getElementById('notes').value,chartUrl:document.getElementById('chartUrl').value, mistakes: selectedMistakes, confirmedCriteria: confirmedCriteria };
+    if(id){ const i=state.trades.findIndex(t=>t.id===id); if(i>-1)state.trades[i]=data; }
+    else{ state.trades.push(data); }
+    state.trades.sort((a,b)=>new Date(a.entryDate)-new Date(b.entryDate));
+    saveTrades(); renderApp(); closeModal('newTradeModal');
+});
+const deleteTrade = (id) => { customConfirm('Are you sure you want to delete this trade?', ()=>{ state.trades=state.trades.filter(t=>t.id!==id); saveTrades(); renderApp(); closeModal('tradeDetailsModal'); }); };
+const editTrade = (id) => { const trade=state.trades.find(t=>t.id===id); if(trade){ closeModal('tradeDetailsModal'); showNewTradeModal(trade); } };
+
+// --- PLAYBOOKS & MISTAKES ---
+const savePlaybooks = () => localStorage.setItem('tradeJournal2.8.playbooks', JSON.stringify(state.playbooks));
+const loadPlaybooks = () => {
+    const savedPlaybooks = localStorage.getItem('tradeJournal2.8.playbooks');
+    if (savedPlaybooks) {
+        state.playbooks = JSON.parse(savedPlaybooks);
+    } else {
+        state.playbooks = [ { id: 'playbook_default_3touch', title: 'Three-Touch Point Break', description: 'A breakout strategy based on a key level being tested three times.', criteria: ['Identify a clear, horizontal support or resistance level.', 'Price touches and reacts to the level three separate times.', 'Enter on a candle close break of the level.', 'Stop is placed on other side of the broken level.'] } ];
+        savePlaybooks();
+    }
+};
+const showNewPlaybookModal = (playbook=null) => {
+    document.getElementById('playbook-form').reset();
+    document.getElementById('playbook-id').value = '';
+    const criteriaList = document.getElementById('playbook-criteria-list');
+    criteriaList.innerHTML = '';
+
+    if(playbook){ 
+        document.getElementById('playbook-title').value = playbook.title;
+        document.getElementById('playbook-description').value = playbook.description;
+        document.getElementById('playbook-id').value = playbook.id;
+        (playbook.criteria || []).forEach(addCriterionInput);
+    } else {
+        addCriterionInput(''); // Start with one empty criterion
+    }
+    showModal('playbookModal');
+};
+
+const addCriterionInput = (value = '') => {
+    const criteriaList = document.getElementById('playbook-criteria-list');
+    const div = document.createElement('div');
+    div.className = 'flex items-center gap-2';
+    div.innerHTML = `
+        <input type="text" class="form-input criterion-input flex-1" value="${value}" placeholder="e.g., Price breaks 200 EMA">
+        <button type="button" class="text-red-500 hover:text-red-700 remove-criterion-btn">&times;</button>
+    `;
+    criteriaList.appendChild(div);
+};
+
+document.getElementById('add-criterion-btn').addEventListener('click', () => addCriterionInput());
+document.getElementById('playbook-criteria-list').addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove-criterion-btn')) {
+        e.target.parentElement.remove();
+    }
+});
+
+document.getElementById('playbook-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const id = document.getElementById('playbook-id').value;
+    const criteria = Array.from(document.querySelectorAll('.criterion-input')).map(input => input.value).filter(Boolean);
+
+    const data = { id: id || `playbook_${Date.now()}`, title: document.getElementById('playbook-title').value, description: document.getElementById('playbook-description').value, criteria };
+    
+    if (id) {
+        const index = state.playbooks.findIndex(p => p.id === id);
+        if (index > -1) state.playbooks[index] = data;
+    } else {
+        state.playbooks.push(data);
+    }
+    savePlaybooks();
+    renderPlaybooks();
+    closeModal('playbookModal');
+});
+const deletePlaybook = (id) => {
+    customConfirm('Are you sure you want to delete this playbook? This cannot be undone.', () => {
+        state.playbooks = state.playbooks.filter(p => p.id !== id);
+        savePlaybooks();
+        renderPlaybooks();
+    });
+};
+const populatePlaybookDropdown = (selectedValue = '') => {
+    const dropdown = document.getElementById('strategy');
+    dropdown.innerHTML = '<option value="">Select a Playbook</option>';
+    state.playbooks.forEach(p => {
+        const isSelected = p.title === selectedValue;
+        dropdown.innerHTML += `<option value="${p.title}" ${isSelected ? 'selected' : ''}>${p.title}</option>`;
+    });
+};
+const populateCheckboxes = (containerId, items, name, checkedItems = []) => {
+    const container = document.getElementById(containerId);
+    container.innerHTML = items.length ? '' : `<p class="text-sm text-gray-400">No ${name}s found.</p>`;
+    items.forEach(item => {
+        const isChecked = checkedItems.includes(item);
+        const checkboxId = `${name}-${item.replace(/\s+/g, '-')}`;
+        container.innerHTML += `
+            <div class="flex items-center">
+                <input id="${checkboxId}" name="${name}" type="checkbox" value="${item}" ${isChecked ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <label for="${checkboxId}" class="ml-3 block text-sm text-gray-700">${item}</label>
+            </div>
+        `;
+    });
+};
+const updateCriteriaChecklist = (selectedTitle, confirmedItems = []) => {
+    const checklist = document.getElementById('entry-criteria-checklist');
+    checklist.innerHTML = '';
+    
+    if (!selectedTitle) {
+        checklist.innerHTML = `<p class="text-sm text-gray-400">Select a playbook to see criteria.</p>`;
+        return;
+    }
+
+    const playbook = state.playbooks.find(p => p.title === selectedTitle);
+    if (playbook && playbook.criteria && playbook.criteria.length) {
+        playbook.criteria.forEach(criterion => {
+            const isChecked = confirmedItems.includes(criterion);
+            const criterionId = `criterion-${criterion.replace(/\s+/g, '-')}`;
+            checklist.innerHTML += `
+                <div class="flex items-center">
+                    <input id="${criterionId}" name="criterion" type="checkbox" value="${criterion}" ${isChecked ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <label for="${criterionId}" class="ml-3 block text-sm text-gray-700">${criterion}</label>
+                </div>
+            `;
+        });
+    } else {
+         checklist.innerHTML = `<p class="text-sm text-gray-400">No specific criteria for this playbook.</p>`;
+    }
+    validateCriteria();
+};
+
+// --- FILTERING & METRICS ---
+const getFilteredTrades = () => {
+    const now = new Date();
+    const filters = {
+        ticker: (t) => state.selectedTicker === 'all' || t.ticker === state.selectedTicker,
+        timeframe: (t) => {
+            if (state.timeframe === 'all' || !t.entryDate) return true;
+            const entryDate = new Date(t.entryDate);
+            if (isNaN(entryDate.getTime())) return false;
+            if (state.timeframe === 'today') return entryDate.toDateString() === now.toDateString();
+            const days = state.timeframe === '7d' ? 7 : 30;
+            const cutoff = new Date();
+            cutoff.setDate(now.getDate() - days);
+            return entryDate >= cutoff;
+        }
+    };
+    return state.trades.filter(t => filters.ticker(t) && filters.timeframe(t));
+};
+const calculateMetrics = () => {
+    const trades = getFilteredTrades();
+    const m = { totalPL:0, wins:0, losses:0, totalWinAmount:0, totalLossAmount:0, totalRR:0, rrTrades:0, totalHoldTime:0, holdTrades:0 };
+    trades.forEach(t=>{
+        if (!t.exitPrice) return;
+        const pl = (t.exitPrice - t.entryPrice) * t.quantity * (t.direction === 'long' ? 1 : -1);
+        m.totalPL += pl;
+        if(pl > 0){ m.wins++; m.totalWinAmount += pl; } else if(pl < 0){ m.losses++; m.totalLossAmount += Math.abs(pl); }
+        if(t.stopLoss && t.takeProfit){ const risk=Math.abs(t.entryPrice-t.stopLoss); const reward=Math.abs(t.takeProfit-t.entryPrice); if(risk>0){ m.totalRR+=reward/risk; m.rrTrades++; } }
+        if(t.entryDate && t.exitDate){ const holdTime = new Date(t.exitDate) - new Date(t.entryDate); if(holdTime>=0){ m.totalHoldTime+=holdTime; m.holdTrades++; } }
+    });
+    const totalTrades = trades.length;
+    const avgHoldMs = m.holdTrades > 0 ? m.totalHoldTime / m.holdTrades : 0;
+    const days = Math.floor(avgHoldMs / 864e5); const hours = Math.floor((avgHoldMs % 864e5) / 36e5); const mins = Math.round(((avgHoldMs % 864e5) % 36e5) / 6e4);
+    return {
+        ...m, totalTrades,
+        winRate: (m.wins + m.losses) > 0 ? (m.wins / (m.wins + m.losses)) * 100 : 0,
+        avgWin: m.wins > 0 ? m.totalWinAmount / m.wins : 0,
+        avgLoss: m.losses > 0 ? m.totalLossAmount / m.losses : 0,
+        avgRR: m.rrTrades > 0 ? m.totalRR / m.rrTrades : 0,
+        avgHoldTime: avgHoldMs > 0 ? `${days}d ${hours}h ${mins}m` : 'N/A'
+    };
+};
+
+// --- RENDERING ---
+function renderDashboard() {
+    const m = calculateMetrics();
+    const plColor = m.totalPL >= 0 ? 'text-green-600' : 'text-red-600';
+    const statItem = (label, value, colorClass='') => `<div class="stat-card"><div class="text-sm text-gray-500">${label}</div><div class="text-2xl font-bold ${colorClass}">${value}</div></div>`;
+    document.getElementById('dashboard').innerHTML = [statItem('Net P&L', formatCurrency(m.totalPL), plColor),statItem('Win Rate', `${m.winRate.toFixed(1)}%`),statItem('Avg. R:R', m.avgRR > 0 ? `${m.avgRR.toFixed(2)}:1` : 'N/A'),statItem('Avg. Hold Time', m.avgHoldTime),statItem('Total Trades', m.totalTrades),statItem('Avg. Win', formatCurrency(m.avgWin), 'text-green-600'),statItem('Avg. Loss', formatCurrency(m.avgLoss), 'text-red-600'),statItem('Total Wins', m.wins, 'text-green-600')].join('');
+    renderCharts(getFilteredTrades());
+}
+function renderCharts(trades) {
+    Object.values(state.charts).forEach(c=>c.destroy());
+    const chartOptions = { responsive:true, maintainAspectRatio:false, scales:{y:{ticks:{color:VARS.text_secondary},grid:{color:VARS.border_color}},x:{ticks:{color:VARS.text_secondary},grid:{color:VARS.border_color}}}, plugins:{legend:{labels:{color:VARS.text_primary}}} };
+    let cumulativePl = 0;
+    const pnlData = trades.filter(t => t.exitPrice).sort((a,b) => new Date(a.entryDate) - new Date(b.entryDate)).map(t => ({ x: new Date(t.entryDate).getTime(), y: cumulativePl += ((t.exitPrice-t.entryPrice)*t.quantity*(t.direction==='long'?1:-1)) }));
+    state.charts.pnl = new Chart('pnlChart', {type:'line', data:{datasets:[{label:'Cumulative P&L',data:pnlData,borderColor:VARS.accent_blue,backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:0.2}]}, options: {...chartOptions, scales: {...chartOptions.scales, x: {...chartOptions.scales.x, type:'time', time:{unit:'day'}}}} });
+    const dayPerformance = trades.filter(t => t.exitPrice).reduce((acc,t)=>{ const day=new Date(t.entryDate).toLocaleString('en-us',{weekday:'short'}); acc[day]=(acc[day]||0)+((t.exitPrice-t.entryPrice)*t.quantity*(t.direction==='long'?1:-1)); return acc; }, {});
+    const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const dayData=dayLabels.map(day=>dayPerformance[day]||0);
+    state.charts.day = new Chart('dayPerformanceChart', {type:'bar',data:{labels:dayLabels,datasets:[{label:'P&L by Day',data:dayData,backgroundColor:dayData.map(v=>v>=0?VARS.accent_green:VARS.accent_red)}]},options:chartOptions});
+    const setupPerformance = {};
+    trades.filter(t => t.exitPrice).forEach(t => {
+        const pl = (t.exitPrice - t.entryPrice) * t.quantity * (t.direction === 'long' ? 1 : -1);
+        if (t.strategy) {
+             setupPerformance[t.strategy] = (setupPerformance[t.strategy] || 0) + pl;
+        }
+    });
+    state.charts.setup = new Chart('setupPerformanceChart', {type:'bar',data:{labels:Object.keys(setupPerformance),datasets:[{label:'P&L by Setup',data:Object.values(setupPerformance),backgroundColor:Object.values(setupPerformance).map(v=>v>=0?VARS.accent_green:VARS.accent_red)}]},options:{...chartOptions, indexAxis: 'y'}});
+}
+function renderTradeLog() {
+    const trades = getFilteredTrades();
+    const tradeLogBody = document.getElementById('trade-log-body');
+    const noTradesMsg = document.getElementById('no-trades-message');
+    if (trades.length === 0) { tradeLogBody.innerHTML = ''; noTradesMsg.style.display = 'block'; return; }
+    noTradesMsg.style.display = 'none';
+    tradeLogBody.innerHTML = trades.map(t => {
+        const pl = t.exitPrice ? (t.exitPrice - t.entryPrice) * t.quantity * (t.direction === 'long' ? 1 : -1) : 0;
+        let statusClass;
+        if (!t.exitPrice) { statusClass = 'bg-gray-100 text-gray-800'; }
+        else if (pl >= 0) { statusClass = 'bg-green-100 text-green-800'; }
+        else { statusClass = 'bg-red-100 text-red-800'; }
+        
+        return `<tr class="border-b" style="border-color: var(--border-color);"><td class="px-6 py-4 font-medium">${t.ticker}</td><td class="px-6 py-4 text-gray-600">${t.direction.charAt(0).toUpperCase()+t.direction.slice(1)}</td><td class="px-6 py-4"><span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">${t.exitPrice?(pl>0?'Win':'Loss'):'Open'}</span></td><td class="px-6 py-4 font-mono ${pl>=0?'text-green-600':'text-red-600'}">${t.exitPrice?formatCurrency(pl):'-'}</td><td class="px-6 py-4 text-gray-600">${t.entryDate}</td><td class="px-6 py-4 text-gray-600">${t.strategy || 'N/A'}</td><td class="px-6 py-4 text-center"><button onclick="showTradeDetails('${t.id}')" class="font-medium text-blue-600 hover:underline">View</button></td></tr>`;
+    }).join('');
+}
+function showTradeDetails(id) {
+    const t = state.trades.find(tr => tr.id === id); if (!t) return;
+    const pl = t.exitPrice ? (t.exitPrice-t.entryPrice)*t.quantity*(t.direction==='long'?1:-1) : 0;
+    const plPercent = t.exitPrice && t.entryPrice > 0 ? (pl/(t.entryPrice*t.quantity))*100 : 0;
+    const plColor=pl>=0?'text-green-600':'text-red-600';
+    const detailRow = (label,value) => `<div class="flex justify-between py-2 border-b" style="border-color: var(--border-color);"><span class="text-gray-500">${label}</span><span class="font-medium text-right">${value||'N/A'}</span></div>`;
+    const tagList = (items, color, title) => items && items.length ? `<h4 class="text-lg font-semibold mb-3">${title}</h4><div class="flex flex-wrap">${items.map(item => `<span class="inline-block ${color} text-xs font-medium mr-2 mb-2 px-2.5 py-0.5 rounded-full">${item}</span>`).join('')}</div>` : '';
+
+    const playbook = state.playbooks.find(p => p.title === t.strategy);
+    let criteriaHtml = '';
+    if (playbook && playbook.criteria && playbook.criteria.length) {
+        const criteriaListHtml = playbook.criteria.map(criterion => {
+            const isChecked = t.confirmedCriteria && t.confirmedCriteria.includes(criterion);
+            return `
+                <div class="flex items-center">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="return false;" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-default">
+                    <label class="ml-2 block text-sm ${isChecked ? 'text-gray-800' : 'text-gray-400'}">${criterion}</label>
+                </div>
+            `;
+        }).join('');
+        criteriaHtml = `<h4 class="text-lg font-semibold mb-3">Confirmed Entry Criteria</h4><div class="space-y-2">${criteriaListHtml}</div>`;
+    }
+
+    document.getElementById('tradeDetailsModal').innerHTML = `<div class="p-6"><div class="flex justify-between items-start mb-4"><div><h3 class="text-2xl font-bold">${t.ticker}</h3>${t.strategy ? `<span class="inline-block bg-blue-100 text-blue-800 text-sm font-medium mt-2 px-3 py-1 rounded-full">${t.strategy}</span>`: ''}<p class="text-sm text-gray-400 mt-2">${t.entryDate} to ${t.exitDate||'Open'}</p></div><div class="text-right">${t.exitPrice?`<p class="text-2xl font-bold ${plColor}">${formatCurrency(pl)}</p><p class="text-sm ${plColor}">${plPercent.toFixed(2)}%</p>`:`<p class="text-2xl font-bold text-gray-500">OPEN</p>`}</div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mt-6"><div><h4 class="text-lg font-semibold mb-3">Execution</h4><div class="space-y-1 text-sm">${detailRow('Direction',t.direction.toUpperCase())}${detailRow('Quantity',t.quantity)}${detailRow('Entry Price',formatCurrency(t.entryPrice))}${detailRow('Exit Price',t.exitPrice?formatCurrency(t.exitPrice):'N/A')}${detailRow('Stop Loss',t.stopLoss?formatCurrency(t.stopLoss):'N/A')}${detailRow('Take Profit',t.takeProfit?formatCurrency(t.takeProfit):'N/A')}${detailRow('Risk Factor', t.riskFactor ? formatCurrency(t.riskFactor): 'N/A')}</div></div><div>${criteriaHtml}</div><div class="md:col-span-2">${tagList(t.mistakes, 'bg-red-100 text-red-800', 'Mistakes')}</div><div class="md:col-span-2"><h4 class="text-lg font-semibold mb-3">Notes</h4><p class="text-gray-600 text-sm whitespace-pre-wrap p-3 rounded-md" style="background-color: var(--bg-secondary); min-height: 80px;">${t.notes||'No notes.'}</p></div><div class="md:col-span-2"><h4 class="text-lg font-semibold mb-3">Chart</h4><div class="w-full h-64 rounded-md flex items-center justify-center" style="background-color: var(--bg-secondary);">${t.chartUrl?`<img src="${t.chartUrl}" class="object-contain max-w-full max-h-full rounded-md" alt="Trade Chart">`:'<span class="text-gray-400">No chart.</span>'}</div></div></div><div class="mt-6 flex justify-end gap-3"><button onclick="closeModal('tradeDetailsModal')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg">Close</button><button onclick="editTrade('${t.id}')" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg">Edit</button><button onclick="deleteTrade('${t.id}')" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg">Delete</button></div></div>`;
+    showModal('tradeDetailsModal');
+}
+function renderPlaybooks() {
+    const listEl = document.getElementById('playbooks-list');
+    const emptyMsg = document.getElementById('no-playbooks-message');
+    if (state.playbooks.length === 0) {
+        listEl.innerHTML = '';
+        emptyMsg.classList.remove('hidden');
+        return;
+    }
+    emptyMsg.classList.add('hidden');
+    listEl.innerHTML = state.playbooks.map(p => `
+        <div class="stat-card flex flex-col justify-between">
+            <div>
+                <h3 class="text-lg font-bold">${p.title}</h3>
+                <p class="text-sm text-gray-500 mt-2 whitespace-pre-wrap">${p.description}</p>
+                ${p.criteria && p.criteria.length ? `<div class="mt-4"><h4 class="text-sm font-semibold mb-2">Criteria:</h4><ul class="list-disc list-inside text-sm text-gray-600">${p.criteria.map(c => `<li>${c}</li>`).join('')}</ul></div>` : ''}
+            </div>
+            <div class="mt-4 flex justify-end gap-2">
+                <button onclick='showNewPlaybookModal(${JSON.stringify(p)})' class="text-sm text-blue-600 hover:underline">Edit</button>
+                <button onclick="deletePlaybook('${p.id}')" class="text-sm text-red-600 hover:underline">Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+
+// --- PLANNING CALENDAR ---
+const saveDailyPlan=()=>{ const dateKey = document.getElementById('plan-date').value; const plans=JSON.parse(localStorage.getItem('dailyPlans2.8')||'{}'); plans[dateKey]={recap:document.getElementById('daily-recap').value,focus:document.getElementById('daily-focus').value,setups:document.getElementById('daily-setups').value}; localStorage.setItem('dailyPlans2.8',JSON.stringify(plans)); renderCalendar(); };
+const showPlanModal = (dateStr) => {
+    document.getElementById('plan-modal-title').textContent = `Plan for ${new Date(dateStr+'T00:00:00').toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'})}`;
+    document.getElementById('plan-date').value = dateStr;
+    const plans = JSON.parse(localStorage.getItem('dailyPlans2.8') || '{}');
+    const p = plans[dateStr] || {recap:'', focus:'', setups:''};
+    document.getElementById('daily-recap').value = p.recap;
+    document.getElementById('daily-focus').value = p.focus;
+    document.getElementById('daily-setups').value = p.setups;
+    showModal('planModal');
+};
+function renderCalendar() {
+    const calendarBody = document.getElementById('calendar-body');
+    const header = document.getElementById('calendar-header');
+    const today = new Date();
+    const month = state.calendarDate.getMonth();
+    const year = state.calendarDate.getFullYear();
+
+    header.textContent = state.calendarDate.toLocaleDateString('default', { month: 'long', year: 'numeric' });
+    
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    calendarBody.innerHTML = '';
+
+    const monthTrades = state.trades.filter(t => {
+        if (!t.entryDate) return false;
+        const d = new Date(t.entryDate);
+        return d.getMonth() === month && d.getFullYear() === year;
+    });
+
+    let monthPL = 0;
+    let monthTradeCount = 0;
+
+    for(let i=0; i < firstDay; i++) { calendarBody.innerHTML += `<div class="calendar-day other-month"></div>`; }
+
+    for(let day=1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const dayTrades = monthTrades.filter(t => t.entryDate === dateStr);
+        let dayPL = 0;
+        dayTrades.forEach(t => { if (t.exitPrice) dayPL += (t.exitPrice - t.entryPrice) * t.quantity * (t.direction === 'long' ? 1 : -1) });
+        
+        monthPL += dayPL;
+        monthTradeCount += dayTrades.length;
+
+        const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+        const plColor = dayPL > 0 ? 'text-green-600' : (dayPL < 0 ? 'text-red-600' : 'text-gray-500');
+
+        const dayEl = document.createElement('div');
+        dayEl.className = 'calendar-day';
+        if (new Date(dateStr) <= today) {
+            dayEl.onclick = () => showPlanModal(dateStr);
+        } else {
+             dayEl.style.cursor = 'default';
+        }
+        
+        dayEl.innerHTML = `
+            <div class="day-number ${isToday ? 'today' : ''}">${day}</div>
+            ${dayTrades.length > 0 ? `
+            <div class="day-stats">
+                <p class="font-bold ${plColor}">${formatCurrency(dayPL)}</p>
+                <p class="text-xs text-gray-400">${dayTrades.length} trade${dayTrades.length > 1 ? 's' : ''}</p>
+            </div>
+            ` : ''}
+        `;
+        calendarBody.appendChild(dayEl);
+    }
+    
+    const monthlyStatsEl = document.getElementById('monthly-stats');
+    const monthlyPLColor = monthPL >= 0 ? 'text-green-600' : 'text-red-600';
+    monthlyStatsEl.innerHTML = `<span class="font-semibold text-sm">Monthly:</span> <span class="${monthlyPLColor} font-bold text-sm">${formatCurrency(monthPL)}</span> <span class="text-gray-500 text-sm">/ ${monthTradeCount} trades</span>`;
+}
+document.getElementById('prev-month-btn').onclick = () => { state.calendarDate.setMonth(state.calendarDate.getMonth() - 1); renderCalendar(); };
+document.getElementById('next-month-btn').onclick = () => { state.calendarDate.setMonth(state.calendarDate.getMonth() + 1); renderCalendar(); };
+document.getElementById('save-plan-btn').onclick = () => { saveDailyPlan(); closeModal('planModal'); };
+
+// --- IMPORT / EXPORT ---
+const exportData=()=>{const d=JSON.stringify({trades: state.trades, playbooks: state.playbooks},null,2),b=new Blob([d],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='trade_journal_2.8.json';a.click();URL.revokeObjectURL(u);closeModal('importExportModal');};
+document.getElementById('importFile').addEventListener('change',handleFileImport(JSON.parse,d=>Array.isArray(d.trades) && Array.isArray(d.playbooks)));
+document.getElementById('importCsvFile').addEventListener('change',handleFileImport(parseCSV,d=>Array.isArray(d)));
+function handleFileImport(parser,validator){return(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=(ev)=>{try{const d=parser(ev.target.result);if(validator(d)){
+    if(d.trades) { // JSON import with new structure
+        customConfirm(`Import ${d.trades.length} trades and ${d.playbooks.length} playbooks? This will overwrite existing data.`,()=>{
+            state.trades = d.trades;
+            state.playbooks = d.playbooks;
+            saveTrades();
+            savePlaybooks();
+            renderApp();
+            customAlert('Imported successfully!');
+        });
+    } else { // CSV import (trades only)
+         customConfirm(`Add ${d.length} trades?`,()=>{const n=d.map(t=>({...t,id:`trade_${Date.now()}_${Math.random()}`}));state.trades.push(...n);state.trades.sort((a,b)=>new Date(a.entryDate)-new Date(b.entryDate));saveTrades();renderApp();customAlert('Imported!');});
+    }
+}else{customAlert('Invalid file format.');}}catch(err){customAlert('Error parsing file.');console.error(err);}closeModal('importExportModal');e.target.value=null;};r.readAsText(f);};}
+function parseCSV(csv){const l=csv.split('\n').filter(Boolean),h=l[0].split(',').map(s=>s.trim().toLowerCase());if(!['ticker','direction','entrydate'].every(c=>h.includes(c)))return[];return l.slice(1).map(line=>{const v=line.split(','),t={};h.forEach((c,i)=>{let val=v[i]?v[i].trim():null;const k=c.replace(/\s/g,'').toLowerCase();if(['entryprice','exitprice','quantity','stoploss','takeprofit'].includes(k))val=parseFloat(val)||null;t[k]=val;});return t;});}
+
+// --- INITIALIZATION ---
+function renderApp() {
+    document.getElementById('ticker-filter').innerHTML=`<option value="all">All Tickers</option>${[...new Set(state.trades.map(t=>t.ticker))].sort().map(t=>`<option value="${t}">${t}</option>`).join('')}`;
+    document.getElementById('ticker-filter').value = state.selectedTicker;
+    renderDashboard();
+    renderTradeLog();
+    renderCalendar();
+    renderPlaybooks();
+}
+document.addEventListener('DOMContentLoaded', () => {
+    loadTrades();
+    loadPlaybooks();
+    document.getElementById('ticker-filter').addEventListener('change',(e)=>{state.selectedTicker=e.target.value;renderApp();});
+    document.getElementById('timeframe-filters').addEventListener('click', (e)=>{ if(e.target.tagName==='BUTTON'){ document.querySelectorAll('#timeframe-filters button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); state.timeframe = e.target.dataset.frame; renderApp(); } });
+    
+    const validateCriteria = () => {
+        const checklist = document.getElementById('entry-criteria-checklist');
+        const checkboxes = checklist.querySelectorAll('input[type="checkbox"]');
+        const saveBtn = document.getElementById('save-trade-btn');
+        
+        const totalCriteria = checkboxes.length;
+        if (totalCriteria === 0) {
+            saveBtn.disabled = false;
+            return;
+        }
+
+        const checkedCriteria = Array.from(checkboxes).filter(cb => cb.checked).length;
+        
+        // Enable save button if 50% or more of criteria are met
+        saveBtn.disabled = (checkedCriteria / totalCriteria) < 0.5;
+    };
+
+    document.getElementById('strategy').addEventListener('change', (e) => {
+        const selectedTitle = e.target.value;
+        const checklist = document.getElementById('entry-criteria-checklist');
+        
+        checklist.innerHTML = '';
+        
+        if (!selectedTitle) {
+            checklist.innerHTML = `<p class="text-sm text-gray-400">Select a playbook to see criteria.</p>`;
+            validateCriteria();
+            return;
+        }
+
+        const playbook = state.playbooks.find(p => p.title === selectedTitle);
+        if (playbook && playbook.criteria && playbook.criteria.length) {
+            playbook.criteria.forEach(criterion => {
+                const criterionId = `criterion-${criterion.replace(/\s+/g, '-')}`;
+                checklist.innerHTML += `
+                    <div class="flex items-center">
+                        <input id="${criterionId}" name="criterion" type="checkbox" value="${criterion}" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <label for="${criterionId}" class="ml-3 block text-sm text-gray-700">${criterion}</label>
+                    </div>
+                `;
+            });
+        } else {
+             checklist.innerHTML = `<p class="text-sm text-gray-400">No specific criteria for this playbook.</p>`;
+        }
+        validateCriteria();
+    });
+
+    document.getElementById('entry-criteria-checklist').addEventListener('change', validateCriteria);
+
+    renderApp();
+});
+</script>
+</body>
+</html>
+
